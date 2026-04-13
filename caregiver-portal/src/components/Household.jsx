@@ -509,6 +509,12 @@ useEffect(() => {
       partnerRef.current = partner;
     }, [partner]);
 
+    // keep a ref to latest household members state so the cleanup can access it                                     
+    const householdMembersRef = useRef(householdMembers);
+    useEffect(() => {                           
+      householdMembersRef.current = householdMembers;
+    }, [householdMembers]);
+
     // track true unmount vs dep-change re-run                                                                       
     const isUnmountingRef = useRef(false);                                                                         
     useEffect(() => {                           
@@ -518,82 +524,78 @@ useEffect(() => {
       };            
     }, []); 
 
+    const isPartnerSaveable = (p) => hasPartner && p.isDirty && p.firstName && p.lastName && p.dob && p.email && p.relationship && p.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(p.dob) >= MIN_ADULT_AGE;
+
+    const isMemberSaveable = (member) => {
+      const isAdult = calculateAge(member.dob) >= MIN_ADULT_AGE;
+      const isComplete = member.firstName && member.lastName && member.dob && member.relationship && member.genderType;
+      const hasEmailIfAdult = !isAdult || member.email;
+      const memberId = member.householdMemberId || householdMembers.indexOf(member);
+      const hasEmailError = fieldLengthErrors[`member-${memberId}-email`];
+      const hasFieldLengthError = fieldLengthErrors[`member-${memberId}-firstName`] || fieldLengthErrors[`member-${memberId}-lastName`];
+      const hasDuplicateError = duplicateErrors[`member-${memberId}`];
+      return isComplete && member.isDirty && hasEmailIfAdult && !hasEmailError && !hasFieldLengthError && !hasDuplicateError;
+    }
+
+    const saveDirtyMembers = (members) => {
+      for (const member of members) {
+        if(isMemberSaveable(member)) {
+        const saveId = member.householdMemberId || `temp-${member.index}`;
+        if(!savingMembersRef.current.has(saveId)) {
+          savingMembersRef.current.add(saveId);
+          saveHouseholdMember(member).then((savedMember) => {
+            const memberIndex = householdMembers.indexOf(member);
+            if (savedMember.householdMemberId && !member.householdMemberId) {
+              updateHouseholdMember(memberIndex, 'householdMemberId', savedMember.householdMemberId);            
+            }   
+            updateHouseholdMember(member.householdMemberId || memberIndex, 'isDirty', false);                    
+            savingMembersRef.current.delete(saveId);
+          }).catch((error) => {
+            console.error(error);
+            const memberId = member.householdMemberId || householdMembers.indexOf(member);
+            if (error.message && error.message.startsWith('DUPLICATE:')) {                                       
+              setDuplicateErrors(prev => ({ 
+                ...prev,                                                                                         
+                [`member-${memberId}`]: 'This person is already in your household; they can be removed.'
+              }));                                                                                               
+            }
+            savingMembersRef.current.delete(saveId); 
+          });
+        }
+      }
+    }
+  };
+
     // auto save partner data
     useEffect(() => {
       const timer = setTimeout(() => {
-        if (hasPartner && partner.isDirty && partner.firstName && partner.lastName && partner.dob && partner.email && partner.relationship && partner.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(partner.dob) >= MIN_ADULT_AGE) {
+        if (isPartnerSaveable(partner)) {
           saveHouseholdMember(partner).catch(console.error);
-      }
-    }, 2000); // 2 seconds delay      
-
-    return () => { 
-      clearTimeout(timer); // reset the clock.
-      if (isUnmountingRef.current) {
-        // save immediately on unmount if partner is complete
-        const p = partnerRef.current;
-        if (hasPartner && p.firstName && p.lastName && p.dob && p.email && p.relationship && p.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(p.dob) >= MIN_ADULT_AGE) {
-          saveHouseholdMember(p).catch(console.error);
         }
-      }
-    };
+      }, 2000); // 2 seconds delay      
+
+      return () => { 
+        clearTimeout(timer); // reset the clock.
+        if (isUnmountingRef.current) {
+          // save immediately on unmount if partner is complete
+          const p = partnerRef.current;
+          if (isPartnerSaveable(p)) saveHouseholdMember(p).catch(console.error);
+        }
+        };
     }, [partner.firstName, partner.lastName, partner.dob, partner.email, hasPartner, partner, saveHouseholdMember, emailValidationErrors, fieldLengthErrors, calculateAge]);
 
     // auto save household members when they have completed data
-    useEffect(() => { 
+    useEffect(() => {                                                                                                
       const timer = setTimeout(() => {
-        if (householdMembers.length > 0) {
-          for (const member of householdMembers) {
-            const age = calculateAge(member.dob);
-            const isAdult = age >= MIN_ADULT_AGE;
-            const isComplete = member.firstName && member.lastName && member.dob && member.relationship && member.genderType;
-            const hasEmailIfAdult = !isAdult || (isAdult && member.email);
-
-            // check for validation errors
-            const memberId = member.householdMemberId || householdMembers.indexOf(member);
-            const hasEmailError = emailValidationErrors[`member-${memberId}-email`];
-            const hasFieldLengthError = fieldLengthErrors[`member-${memberId}-firstName`] ||
-              fieldLengthErrors[`member-${memberId}-lastName`] ||
-              fieldLengthErrors[`member-${memberId}-email`] ||
-              fieldLengthErrors[`member-${memberId}-dob`];
-            const hasDuplicateError = duplicateErrors[`member-${memberId}`];                    
-  
-          // only save if complete, valid and dirty
-          if (isComplete && hasEmailIfAdult && !hasEmailError && !hasFieldLengthError && !hasDuplicateError && member.isDirty) {
-            const saveId = member.householdMemberId || `temp-${member.index}`;
-
-            if (!savingMembersRef.current.has(saveId)) {
-              savingMembersRef.current.add(saveId);
-
-              saveHouseholdMember(member)
-              .then((savedMember) => {
-                const memberIndex = householdMembers.indexOf(member);
-                // Update the householdMemberId if this was a new member
-                if (savedMember.householdMemberId && !member.householdMemberId) {
-                  updateHouseholdMember(memberIndex, 'householdMemberId', savedMember.householdMemberId);
-                }
-                // Mark as not dirty
-                updateHouseholdMember(member.householdMemberId || memberIndex, 'isDirty', false);
-                savingMembersRef.current.delete(saveId);
-              })
-                .catch((error) => {
-                  console.error(error);
-
-                  // Check if it's a duplicate error from backend
-                  if (error.message && error.message.startsWith('DUPLICATE:')) {
-                    setDuplicateErrors(prev => ({
-                      ...prev,
-                      [`member-${memberId}`]: 'This person is already in your household; they can be removed.'
-                    }));
-                  }
-                  savingMembersRef.current.delete(saveId);
-                });
-            } 
-          }
-        }
-      }
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [householdMembers, saveHouseholdMember, calculateAge, updateHouseholdMember, emailValidationErrors, fieldLengthErrors, duplicateErrors]);
+        if (householdMembers.length > 0) saveDirtyMembers(householdMembers);                                         
+      }, 2000);                                 
+                                            
+      return () => {
+        clearTimeout(timer);                                                                                         
+        if (isUnmountingRef.current) saveDirtyMembers(householdMembersRef.current);
+      };                                                                                                             
+    }, [householdMembers, saveHouseholdMember, calculateAge, updateHouseholdMember, emailValidationErrors,
+    fieldLengthErrors, duplicateErrors]); 
 
     const handleRemovePartner = async () => {
       if (hasPartner && partner.firstName && partner.lastName && partner.dob && partner.email) {
