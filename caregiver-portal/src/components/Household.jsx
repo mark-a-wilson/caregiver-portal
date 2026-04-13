@@ -265,6 +265,8 @@ useEffect(() => {
 
     // updatePartner with age validation
     const handleUpdatePartner = (field, value) => {
+
+      console.log("handleUpdatePartner:", field, value);
       // Field length validation
       if (field === 'firstName' || field === 'lastName') {
         if (!validateFieldLength(value, MAX_NAME_LENGTH, field === 'firstName' ? 'First name' : 'Last name', `partner-${field}`)) {
@@ -501,16 +503,39 @@ useEffect(() => {
     updateHouseholdMember(memberIndex, field, value);
   };
 
+    // keep a ref to the latest partner state so the cleanup can access it
+    const partnerRef = useRef(partner);
+    useEffect(() => {
+      partnerRef.current = partner;
+    }, [partner]);
+
+    // track true unmount vs dep-change re-run                                                                       
+    const isUnmountingRef = useRef(false);                                                                         
+    useEffect(() => {                           
+      isUnmountingRef.current = false;                                                                               
+      return () => {
+        isUnmountingRef.current = true;                                                                              
+      };            
+    }, []); 
+
     // auto save partner data
     useEffect(() => {
       const timer = setTimeout(() => {
-        if (hasPartner && partner.firstName && partner.lastName && partner.dob && partner.email && partner.relationship && partner.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(partner.dob) >= MIN_ADULT_AGE) {
+        if (hasPartner && partner.isDirty && partner.firstName && partner.lastName && partner.dob && partner.email && partner.relationship && partner.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(partner.dob) >= MIN_ADULT_AGE) {
           saveHouseholdMember(partner).catch(console.error);
       }
     }, 2000); // 2 seconds delay      
 
-    return () => clearTimeout(timer); // reset the clock.
-
+    return () => { 
+      clearTimeout(timer); // reset the clock.
+      if (isUnmountingRef.current) {
+        // save immediately on unmount if partner is complete
+        const p = partnerRef.current;
+        if (hasPartner && p.firstName && p.lastName && p.dob && p.email && p.relationship && p.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(p.dob) >= MIN_ADULT_AGE) {
+          saveHouseholdMember(p).catch(console.error);
+        }
+      }
+    };
     }, [partner.firstName, partner.lastName, partner.dob, partner.email, hasPartner, partner, saveHouseholdMember, emailValidationErrors, fieldLengthErrors, calculateAge]);
 
     // auto save household members when they have completed data
