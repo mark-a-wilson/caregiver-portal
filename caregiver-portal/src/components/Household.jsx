@@ -392,10 +392,6 @@ useEffect(() => {
 
     // Email validation - ONLY for adults (18+)
     if (field === 'email') {
-      const age = member.dob ? calculateAge(member.dob) : null;
-      const isAdult = age !== null && age >= MIN_ADULT_AGE;
-
-      if (isAdult) {
         // Validate email length
         if (value && value.length > MAX_EMAIL_LENGTH) {
           setFieldLengthErrors(prev => ({
@@ -417,11 +413,6 @@ useEffect(() => {
             setDuplicateErrors(prev => ({ ...prev, [`member-${memberId}`]: '' }));
           }
         }
-      } else {
-        // Clear email validation errors for children
-        setEmailValidationErrors(prev => ({ ...prev, [`member-${memberId}-email`]: '' }));
-        setFieldLengthErrors(prev => ({ ...prev, [`member-${memberId}-email`]: '' }));
-      }
     }
 
 
@@ -463,13 +454,6 @@ useEffect(() => {
       if (!validateAge(value, `member-${memberId}-dob`)) {
         updateHouseholdMember(memberIndex, field, value);
         return;
-      }
-
-      // Clear email validation errors if member becomes a child
-      const age = calculateAge(value);
-      if (age < MIN_ADULT_AGE) {
-        setEmailValidationErrors(prev => ({ ...prev, [`member-${memberId}-email`]: '' }));
-        setFieldLengthErrors(prev => ({ ...prev, [`member-${memberId}-email`]: '' }));
       }
 
       const dupCheck = checkForDuplicate(member.firstName, member.lastName, value, memberId);
@@ -527,14 +511,14 @@ useEffect(() => {
     const isPartnerSaveable = (p) => hasPartner && p.isDirty && p.firstName && p.lastName && p.dob && p.email && p.relationship && p.genderType && !emailValidationErrors['partner-email'] && !fieldLengthErrors['partner-email'] && calculateAge(p.dob) >= MIN_ADULT_AGE;
 
     const isMemberSaveable = (member) => {
-      const isAdult = calculateAge(member.dob) >= MIN_ADULT_AGE;
+      const isAdult = calculateAge(member.dob) >= MIN_ADULT_AGE; 
       const isComplete = member.firstName && member.lastName && member.dob && member.relationship && member.genderType;
-      const hasEmailIfAdult = !isAdult || member.email;
       const memberId = member.householdMemberId || householdMembers.indexOf(member);
+      const hasEmail = !!member.email;
       const hasEmailError = fieldLengthErrors[`member-${memberId}-email`];
       const hasFieldLengthError = fieldLengthErrors[`member-${memberId}-firstName`] || fieldLengthErrors[`member-${memberId}-lastName`];
       const hasDuplicateError = duplicateErrors[`member-${memberId}`];
-      return isComplete && member.isDirty && hasEmailIfAdult && !hasEmailError && !hasFieldLengthError && !hasDuplicateError;
+      return isComplete && member.isDirty && isAdult && hasEmail && !hasEmailError && !hasFieldLengthError && !hasDuplicateError;
     }
 
     const saveDirtyMembers = (members) => {
@@ -969,7 +953,7 @@ useEffect(() => {
                           </label>
                         </div>
 
-                  {calculateAge(member.dob) >= MIN_ADULT_AGE && (
+                  
                     <>
                   <label htmlFor={`member-${member.householdMemberId}-email`} className="form-control-label">
                     Email<span className="required">*</span>
@@ -990,7 +974,7 @@ useEffect(() => {
                     </label>
                   )}  
                   </>
-                  )}
+                  
                 </div>
 
                 {duplicateErrors[`member-${member.householdMemberId || index}`] && (
