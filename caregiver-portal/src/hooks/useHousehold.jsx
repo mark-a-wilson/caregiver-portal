@@ -17,7 +17,8 @@ export const useHousehold = ({applicationPackageId}) => {
         email: '',
         relationship: '',
         genderType: '',
-        householdMemberId: null
+        householdMemberId: null,
+        isDirty: false
     });
 
     const [householdMembers, setHouseholdMembers] = useState([]); // all non-spouse household members 
@@ -148,6 +149,7 @@ export const useHousehold = ({applicationPackageId}) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
                 });
+            console.log(response);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -163,7 +165,7 @@ export const useHousehold = ({applicationPackageId}) => {
             // update the appropriate state based on relationship type
             if (memberData.relationship === 'Spouse' || memberData.relationship === 'Partner' || memberData.relationship === 'Common law') { 
                 if(!memberData.householdMemberId && savedMember.householdMemberId) {
-                    setPartner(prev => ({...prev, householdMemberId: savedMember.householdMemberId}));
+                    setPartner(prev => ({...prev, householdMemberId: savedMember.householdMemberId, isDirty: false}));
                 }
             } 
 
@@ -215,7 +217,8 @@ export const useHousehold = ({applicationPackageId}) => {
     }, []);
   
     const updatePartner = useCallback((field, value) => {
-        setPartner(prev => ({ ...prev, [field]: value }));
+        console.log("updating partner",field, value);
+        setPartner(prev => ({ ...prev, [field]: value, isDirty: true }));
     }, []);
   
     const updateHouseholdMember = useCallback((identifier, field, value) => {
