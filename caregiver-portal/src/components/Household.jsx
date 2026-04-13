@@ -515,7 +515,7 @@ useEffect(() => {
       const isComplete = member.firstName && member.lastName && member.dob && member.relationship && member.genderType;
       const memberId = member.householdMemberId || householdMembers.indexOf(member);
       const hasEmail = !!member.email;
-      const hasEmailError = fieldLengthErrors[`member-${memberId}-email`];
+      const hasEmailError = emailValidationErrors[`member-${memberId}-email`] || fieldLengthErrors[`member-${memberId}-email`];
       const hasFieldLengthError = fieldLengthErrors[`member-${memberId}-firstName`] || fieldLengthErrors[`member-${memberId}-lastName`];
       const hasDuplicateError = duplicateErrors[`member-${memberId}`];
       return isComplete && member.isDirty && isAdult && hasEmail && !hasEmailError && !hasFieldLengthError && !hasDuplicateError;
