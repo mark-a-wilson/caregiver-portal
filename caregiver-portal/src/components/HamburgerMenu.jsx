@@ -62,7 +62,7 @@ const HamburgerMenu = () => {
             {isOpen && (
                 <div className="dropdown-menu">
                 <ul className="menu-list">
-                <li className="menu-header">{toTitleCase(user.name || 'User')}</li>
+                <li className="menu-header">{toTitleCase(user.name?.replace(/undefined/gi, '').trim() || 'User')}</li>
                 <li className="menu-item">
                     <button onClick={() => handleMenuItemClick('logout')}>
                     Log out
