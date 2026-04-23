@@ -17,7 +17,8 @@ export const useHousehold = ({applicationPackageId}) => {
         email: '',
         relationship: '',
         genderType: '',
-        householdMemberId: null
+        householdMemberId: null,
+        isDirty: false
     });
 
     const [householdMembers, setHouseholdMembers] = useState([]); // all non-spouse household members 
@@ -148,6 +149,7 @@ export const useHousehold = ({applicationPackageId}) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody),
                 });
+            console.log(response);
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -163,7 +165,7 @@ export const useHousehold = ({applicationPackageId}) => {
             // update the appropriate state based on relationship type
             if (memberData.relationship === 'Spouse' || memberData.relationship === 'Partner' || memberData.relationship === 'Common law') { 
                 if(!memberData.householdMemberId && savedMember.householdMemberId) {
-                    setPartner(prev => ({...prev, householdMemberId: savedMember.householdMemberId}));
+                    setPartner(prev => ({...prev, householdMemberId: savedMember.householdMemberId, isDirty: false}));
                 }
             } 
 
@@ -215,7 +217,8 @@ export const useHousehold = ({applicationPackageId}) => {
     }, []);
   
     const updatePartner = useCallback((field, value) => {
-        setPartner(prev => ({ ...prev, [field]: value }));
+        console.log("updating partner",field, value);
+        setPartner(prev => ({ ...prev, [field]: value, isDirty: true }));
     }, []);
   
     const updateHouseholdMember = useCallback((identifier, field, value) => {
@@ -384,7 +387,38 @@ export const useHousehold = ({applicationPackageId}) => {
     }, [applicationPackageId]);
 
 
+  const updateHouseholdMemberInfo = useCallback(async (householdMemberId, { lastName, dateOfBirth, email
+  }) => {
+      const response = await fetch(`${API_BASE_URL}/application-package/${applicationPackageId}/household-members/${householdMemberId}`,
+          {
+              method: 'PATCH',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lastName, dateOfBirth, email }),
+          }
+      );
+      if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+  }, [applicationPackageId]);
 
+  const resendMemberAccessCode = useCallback(async (householdMemberId) => {
+    const response = await fetch(
+        `${API_BASE_URL}/application-package/${applicationPackageId}/household-members/${householdMemberId}/access-code/resend`,
+        {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+        }
+    );
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    return await response.json(); // { accessCode, expiresAt, isNew, resendsRemainingToday }
+}, [applicationPackageId]);
   
     return {
         // state
@@ -410,6 +444,8 @@ export const useHousehold = ({applicationPackageId}) => {
         saveHouseholdMember,
         addHouseholdMember,
         updatePartner,
+        updateHouseholdMemberInfo,
+        resendMemberAccessCode,
         updateHouseholdMember,
         removeHouseholdMember,
         removePartner,
